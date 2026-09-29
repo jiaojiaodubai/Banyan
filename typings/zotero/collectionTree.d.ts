@@ -26,6 +26,13 @@ declare namespace _ZoteroTypes {
   interface CollectionTreeRow {
     id: string | number;
     type?: string;
+    /**
+     * Preset id used by the `id` getter for rows whose `type` is not one of
+     * Zotero's built-ins (Banyan's cited-items rows set this).
+     */
+    _id?: string;
+    level?: number;
+    isOpen?: boolean;
     ref: CollectionTreeRowRef;
     getItems: (options?: {
       unfiltered?: boolean;
@@ -35,7 +42,7 @@ declare namespace _ZoteroTypes {
     isSearch?: () => boolean;
     isSearchMode?: () => boolean;
     isCollection?: () => boolean;
-    isLibrary?: () => boolean;
+    isLibrary?: (includeGlobal?: boolean) => boolean;
     visibilityGroup?: string;
     view?: Record<string, unknown>;
   }
@@ -69,6 +76,19 @@ declare namespace _ZoteroTypes {
     getRow: (index: number) => CollectionTreeRow;
     selectByID?: (id: string, ensureRowVisible?: boolean) => Promise<boolean>;
     selectLibrary: (libraryID?: number) => Promise<void>;
+    reload: () => Promise<void>;
+    /**
+     * Expands the row at `row`, splicing its children into `rows`.
+     *
+     * @returns The number of rows added, or `false` for the row types that are
+     *     never expanded (publications and feed rows). Callers accumulate the
+     *     result numerically, so `false` behaves as `0` for them.
+     */
+    _expandRow: (
+      rows: CollectionTreeRow[],
+      row: number,
+      forceOpen?: boolean,
+    ) => Promise<number | false>;
     unregister: () => void;
   }
 }
@@ -86,5 +106,12 @@ declare module "zotero/collectionTree" {
 declare namespace Zotero {
   const CollectionTreeRow: {
     prototype: _ZoteroTypes.CollectionTreeRow;
+    new (
+      collectionTreeView: _ZoteroTypes.CollectionTree,
+      type: string,
+      ref: unknown,
+      level?: number,
+      isOpen?: boolean,
+    ): _ZoteroTypes.CollectionTreeRow;
   };
 }

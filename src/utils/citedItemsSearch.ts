@@ -4,9 +4,6 @@ import type {
   NoteCitation,
 } from "../../typings/style";
 
-export const CITED_ITEMS_SEARCH_MARKER =
-  "__banyan_cited_items_search_collection__";
-
 export type DocumentCitationPreview = {
   htmlParts: string[];
   text: string;
