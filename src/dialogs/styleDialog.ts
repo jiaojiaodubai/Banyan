@@ -3,6 +3,7 @@ import { config } from "../../package.json";
 import { loadStyles, promptImportStyle } from "../modules/styles";
 import { useL10n } from "../utils/locale";
 import { formatStyleUpdatedDate } from "../utils/styleUpdated";
+import { unwrapDialogIO } from "../utils/window";
 import type { StyleIdentifier, StyleResponseData } from "../../typings/server";
 import { StyleSummary } from "../../typings/style";
 
@@ -28,7 +29,12 @@ window.addEventListener("unload", () => {
 });
 
 async function initstyleDialog(): Promise<void> {
-  io = window.arguments[0].wrappedJSObject as IO;
+  const arg = unwrapDialogIO<IO>(window.arguments?.[0]);
+  if (!arg) {
+    ztoolkit.logError("styleDialog: window IO is missing");
+    return;
+  }
+  io = arg;
   // Focus the search box as early as possible so the user can type immediately.
   focusSearchBox();
   rowsAll = getAllRows();
