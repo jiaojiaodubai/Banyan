@@ -2,9 +2,15 @@ import { relateItems } from "./relations";
 import { getLocaleID, useL10n } from "../utils/locale";
 import { openStyleEditorWindow } from "./styleEditor";
 import { openDialogWindow } from "../utils/window";
+import {
+  openCreatorsExtDialog,
+  registerCreatorsExtRowMenu,
+} from "./creatorsExt";
 import { openCreateMultilingualItemDialog } from "./multilingualItem";
 import {
+  mergeExtraField,
   normalizeExtraKey,
+  parseExtraLines,
   toBanyanItem,
   toTitleCaseExtraKey,
 } from "../utils/item";
@@ -81,12 +87,6 @@ type ConflictDecision = {
   applyToRemaining: boolean;
 };
 
-type ParsedExtraLine = {
-  raw: string;
-  normalizedKey: string | null;
-  value: string;
-};
-
 function showSimpleMessage(message: string): void {
   new ztoolkit.ProgressWindow(addon.data.config.addonName, {
     closeOnClick: true,
@@ -139,6 +139,24 @@ function getMultilingualSourceItem(): Zotero.Item | null {
   if (
     languageFieldID === false ||
     !Zotero.ItemFields.isValidForType(languageFieldID, items[0].itemTypeID)
+  ) {
+    return null;
+  }
+  return items[0];
+}
+
+/**
+ * The item "Extend Creator Information" applies to, or null when the entry
+ * does not. Zero-creator items are included on purpose: the window can add
+ * creators from its empty state.
+ */
+function getCreatorsExtTarget(): Zotero.Item | null {
+  const { canEdit, items, selectedCount } = getRegularSelection();
+  if (
+    !canEdit ||
+    items.length !== 1 ||
+    selectedCount !== 1 ||
+    !items[0].isEditable()
   ) {
     return null;
   }
@@ -236,6 +254,32 @@ export function registerContextMenu(): void {
           },
           {
             menuType: "menuitem",
+            l10nID: getLocaleID("menuitem-creators-ext"),
+            // A hidden item cannot be activated, but both hooks resolve the
+            // same target through one predicate so they cannot drift.
+            onShowing: (_event, context) => {
+              context.setVisible(getCreatorsExtTarget() !== null);
+            },
+            onCommand: () => {
+              const item = getCreatorsExtTarget();
+              if (!item) {
+                return;
+              }
+              void openCreatorsExtDialog(item).catch((error) => {
+                ztoolkit.logError(error);
+                showSimpleMessage(
+                  t("creators-ext-open-failed", {
+                    args: {
+                      message:
+                        error instanceof Error ? error.message : String(error),
+                    },
+                  }),
+                );
+              });
+            },
+          },
+          {
+            menuType: "menuitem",
             l10nID: getLocaleID("menuitem-relate-items"),
             onShowing: (_event, context) => {
               const { canEdit, items } = getRegularSelection();
@@ -252,6 +296,7 @@ export function registerContextMenu(): void {
       },
     ],
   });
+  registerCreatorsExtRowMenu();
 }
 
 async function openWriteExtraFieldDialog(): Promise<void> {
@@ -384,64 +429,6 @@ function analyzeExtraField(
     .filter((line) => line.normalizedKey === normalizedKey)
     .map((line) => line.value);
   return { values };
-}
-
-function parseExtraLines(extraText: string): ParsedExtraLine[] {
-  return extraText.split(/\r?\n/).map((raw) => {
-    const index = raw.indexOf(":");
-    if (index <= 0) {
-      return {
-        raw,
-        normalizedKey: null,
-        value: "",
-      };
-    }
-
-    const key = raw.slice(0, index).trim();
-    return {
-      raw,
-      normalizedKey: normalizeExtraKey(key),
-      value: raw.slice(index + 1).trim(),
-    };
-  });
-}
-
-function mergeExtraField(
-  extraText: string,
-  writeKey: string,
-  normalizedKey: string,
-  value: string,
-): string {
-  const newline = extraText.includes("\r\n") ? "\r\n" : "\n";
-  const lines = extraText ? extraText.split(/\r?\n/) : [];
-  const parsed = parseExtraLines(extraText);
-  const newLine = `${writeKey}: ${value}`;
-
-  const firstMatchIndex = parsed.findIndex(
-    (line) => line.normalizedKey === normalizedKey,
-  );
-
-  if (firstMatchIndex === -1) {
-    if (lines.length === 0) {
-      return newLine;
-    }
-    return [...lines, newLine].join(newline);
-  }
-
-  let replaced = false;
-  const out: string[] = [];
-  for (let i = 0; i < parsed.length; i++) {
-    if (parsed[i].normalizedKey !== normalizedKey) {
-      out.push(parsed[i].raw);
-      continue;
-    }
-
-    if (!replaced) {
-      out.push(newLine);
-      replaced = true;
-    }
-  }
-  return out.join(newline);
 }
 
 function promptExtraConflict(

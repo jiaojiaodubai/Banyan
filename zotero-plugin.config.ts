@@ -60,6 +60,10 @@ export default defineConfig({
             out: "extraFieldDialog",
           },
           {
+            in: "src/dialogs/creatorsExtDialog.ts",
+            out: "creatorsExtDialog",
+          },
+          {
             in: "src/dialogs/multilingualItemDialog.ts",
             out: "multilingualItemDialog",
           },

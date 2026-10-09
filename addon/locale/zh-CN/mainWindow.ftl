@@ -15,6 +15,8 @@ menuitem-write-extra-field =
     .label = 写入其他字段
 menuitem-create-multilingual-item =
     .label = 创建多语言条目…
+menuitem-creators-ext =
+    .label = 扩展创建者信息…
 item-tree-citation-column = 引注
 
 item-section-multilingual-head-text =
@@ -33,6 +35,8 @@ relate-multilingual-item-error-different-item-type = 只能将相同条目类型
 relate-multilingual-item-warning-skipped = 有 { $count } 对条目因条目类型或文库不同，未能建立多语关联。
 
 extra-field-write-failed = 写入其他字段失败：{ $message }
+creators-ext-open-failed = 无法打开创建者信息窗口：{ $message }
+creators-ext-already-open = 已有一个「扩展创建者信息」窗口打开，已切换到该窗口。
 extra-field-error-invalid-key = 字段名无效，请重新输入。
 extra-field-conflict-title = 其他字段已存在
 extra-field-conflict-message = 条目“{ $item }”中的“{ $key }”已存在，当前值：{ $existing }
