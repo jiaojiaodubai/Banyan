@@ -42,7 +42,7 @@
     "update-deps": "pnpm update"
   },
   "dependencies": {
-    "zotero-plugin-toolkit": "5.2.0"
+    "zotero-plugin-toolkit": "6.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
