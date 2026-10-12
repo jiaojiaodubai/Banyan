@@ -64,6 +64,53 @@ function allFtlFiles(): string[] {
   return files;
 }
 
+const ADDON_CONTENT = path.resolve("addon/content");
+
+/** The add-on's own windows, i.e. every markup file in the add-on content. */
+function ownMarkupFiles(): string[] {
+  return readdirSync(ADDON_CONTENT, { recursive: true })
+    .map(String)
+    .filter((name) => name.endsWith(".xhtml"))
+    .map((name) => path.join(ADDON_CONTENT, name));
+}
+
+/** Locale file a window declares, e.g. `chrome://…-extraFieldDialog.ftl`. */
+function windowFtlName(markup: string): string | null {
+  const match = /href="__addonRef__-([^"]+)\.ftl"/.exec(markup);
+  return match ? `${match[1]}.ftl` : null;
+}
+
+/** Elements that bind Fluent attributes, as their id and attribute names. */
+function attributeBindings(markup: string): { id: string; attrs: string[] }[] {
+  const bindings: { id: string; attrs: string[] }[] = [];
+  for (const tag of markup.match(/<[a-zA-Z][^>]*>/g) ?? []) {
+    const id = /data-l10n-id="([^"]+)"/.exec(tag)?.[1];
+    const attrs = /data-l10n-attrs="([^"]+)"/.exec(tag)?.[1];
+    if (!id || !attrs) {
+      continue;
+    }
+    bindings.push({ id, attrs: attrs.split(/[\s,]+/).filter(Boolean) });
+  }
+  return bindings;
+}
+
+/** Lines of one message, up to the next message at column 0. */
+function messageBlock(ftl: string, id: string): string[] | null {
+  const lines = ftl.split(/\r?\n/);
+  const start = lines.findIndex((line) => line.startsWith(`${id} =`));
+  if (start === -1) {
+    return null;
+  }
+  const block = [lines[start]];
+  for (let index = start + 1; index < lines.length; index++) {
+    if (/^[A-Za-z][\w-]*\s*=/.test(lines[index])) {
+      break;
+    }
+    block.push(lines[index]);
+  }
+  return block;
+}
+
 describe("locale l10n integrity", function () {
   describe("creators-ext window messages", function () {
     it("defines every message the window asks for", function () {
@@ -97,6 +144,47 @@ describe("locale l10n integrity", function () {
           );
         }
       }
+    });
+  });
+
+  // A window asking for `data-l10n-attrs="placeholder"` needs a message with a
+  // `.placeholder` attribute: a plain-value message silently leaves the element
+  // without its hint.
+  describe("attribute messages of the add-on's windows", function () {
+    it("defines every attribute the markup binds", function () {
+      let checked = 0;
+      for (const file of ownMarkupFiles()) {
+        const markup = readFileSync(file, "utf8");
+        const ftlName = windowFtlName(markup);
+        if (!ftlName) {
+          continue;
+        }
+        for (const locale of LOCALES) {
+          const ftl = readFileSync(
+            path.resolve("addon/locale", locale, ftlName),
+            "utf8",
+          );
+          for (const { id, attrs } of attributeBindings(markup)) {
+            const block = messageBlock(ftl, id);
+            if (!block) {
+              // The window also binds ids from Zotero's own locale files.
+              continue;
+            }
+            checked++;
+            for (const attr of attrs) {
+              assert.isTrue(
+                block.some((line) =>
+                  new RegExp(`^\\s+\\.${attr}\\s*=`).test(line),
+                ),
+                `${locale}/${ftlName}: '${id}' binds '${attr}' but defines no ` +
+                  `'.${attr}' attribute`,
+              );
+            }
+          }
+        }
+      }
+
+      assert.isAbove(checked, 0, "expected attribute bindings in the markup");
     });
   });
 

@@ -1,8 +1,30 @@
-import { useL10n } from "../utils/locale";
+import { getLocaleID, useL10n } from "../utils/locale";
+import { getRegularSelection } from "../utils/selection";
+import type { ItemMenuContribution } from "../../typings/menu";
 
 const t = useL10n(["mainWindow.ftl"]);
 // Relation prefix must match pattern /^[a-z]+:[a-z]+$/
 export const prefix = "banyan:multilingual";
+
+export const relateItemsItemMenu: ItemMenuContribution = {
+  id: "relate-items",
+  build() {
+    return [
+      {
+        menuType: "menuitem",
+        l10nID: getLocaleID("menuitem-relate-items"),
+        onShowing: (_event, context) => {
+          const { canEdit, items } = getRegularSelection();
+          context.setVisible(canEdit && items.length >= 2);
+        },
+        onCommand: () => {
+          const { items } = getRegularSelection();
+          void relateItems(items).catch((error) => ztoolkit.logError(error));
+        },
+      },
+    ];
+  },
+};
 
 /**
  * The dialog throws instead of alerting: a plugin-realm alert is parented to

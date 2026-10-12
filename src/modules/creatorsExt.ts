@@ -1,4 +1,5 @@
 import { getLocaleID, useL10n } from "../utils/locale";
+import { getRegularSelection } from "../utils/selection";
 import { unwrapCreatorExtDialogIO } from "../utils/creatorsExtDialogIO";
 import {
   findWindowByName,
@@ -6,6 +7,7 @@ import {
   openMainWindowDialog,
 } from "../utils/window";
 import type { CreatorExtDialogIO } from "../../typings/creatorsExtDialog";
+import type { ItemMenuContribution } from "../../typings/menu";
 
 const CREATOR_ROW_FIELD_PATTERN =
   /^creator-(\d+)-(?:lastName|firstName|typeID)$/;
@@ -64,6 +66,60 @@ function notify(text: string, type: "default" | "error" = "default"): void {
     .createLine({ text, type })
     .show();
 }
+
+/**
+ * The item "Extend Creator Information" applies to, or null when the entry
+ * does not. Zero-creator items are included on purpose: the window can add
+ * creators from its empty state.
+ */
+function getCreatorsExtTarget(): Zotero.Item | null {
+  const { canEdit, items, selectedCount } = getRegularSelection();
+  if (
+    !canEdit ||
+    items.length !== 1 ||
+    selectedCount !== 1 ||
+    !items[0].isEditable()
+  ) {
+    return null;
+  }
+  return items[0];
+}
+
+export const creatorsExtItemMenu: ItemMenuContribution = {
+  id: "creators-ext",
+  build() {
+    return [
+      {
+        menuType: "menuitem",
+        l10nID: getLocaleID("menuitem-creators-ext"),
+        // A hidden item cannot be activated, but both hooks resolve the
+        // same target through one predicate so they cannot drift.
+        onShowing: (_event, context) => {
+          context.setVisible(getCreatorsExtTarget() !== null);
+        },
+        onCommand: () => {
+          const item = getCreatorsExtTarget();
+          if (!item) {
+            return;
+          }
+
+          void openCreatorsExtDialog(item).catch((error) => {
+            ztoolkit.logError(error);
+            notify(
+              t("creators-ext-open-failed", {
+                args: {
+                  message:
+                    error instanceof Error ? error.message : String(error),
+                },
+              }),
+              "error",
+            );
+          });
+        },
+      },
+    ];
+  },
+};
 
 /**
  * The creator row the menu applies to, or null when it does not. `onShowing`

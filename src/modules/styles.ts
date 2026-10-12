@@ -101,6 +101,10 @@ async function readStylePresetFile(fileName: string): Promise<string> {
   );
 }
 
+/**
+ * Index one style. Announcing the change here keeps every path (startup, import,
+ * overwrite, preset install, style-editor save) in sync with the item menu.
+ */
 function indexLoadedStyle(style: Style, filename: string): void {
   addon.data.styles.cache.delete(style.INFO.id);
   addon.data.styles.files.set(style.INFO.id, {
@@ -111,6 +115,53 @@ function indexLoadedStyle(style: Style, filename: string): void {
     updated: style.INFO.updated,
     filename,
   });
+  notifyStyleIndexChanged();
+}
+
+type StyleIndexListener = () => void;
+
+const styleIndexListeners = new Set<StyleIndexListener>();
+
+/** Depth of the index updates running; a batch notifies once when it ends. */
+let styleIndexBatchDepth = 0;
+let styleIndexNotifyPending = false;
+
+/**
+ * Register a callback invoked after the style index changes (load/import/
+ * install/delete). The item menu rebuilds itself from it.
+ */
+export function onStyleIndexChanged(listener: StyleIndexListener): void {
+  styleIndexListeners.add(listener);
+}
+
+/** Run several index updates as one notification (see `styleIndexBatchDepth`). */
+export async function withStyleIndexBatch<T>(
+  run: () => Promise<T>,
+): Promise<T> {
+  styleIndexBatchDepth++;
+  try {
+    return await run();
+  } finally {
+    styleIndexBatchDepth--;
+    if (!styleIndexBatchDepth && styleIndexNotifyPending) {
+      styleIndexNotifyPending = false;
+      notifyStyleIndexChanged();
+    }
+  }
+}
+
+function notifyStyleIndexChanged(): void {
+  if (styleIndexBatchDepth) {
+    styleIndexNotifyPending = true;
+    return;
+  }
+  for (const listener of styleIndexListeners) {
+    try {
+      listener();
+    } catch (e) {
+      ztoolkit.logError(e);
+    }
+  }
 }
 
 function toSafeStyleFilenameFragment(value: string): string {
@@ -208,46 +259,53 @@ export async function loadStyles(reset?: boolean): Promise<void> {
   if (reset) {
     addon.data.styles.files.clear();
     addon.data.styles.cache.clear();
+    // The index stays empty when the directory has no readable style left, so
+    // the menu has to hear about the cleared index before the files are read.
+    notifyStyleIndexChanged();
   }
   const paths = await IOUtils.getChildren(dirPath);
-  for (const path of paths.toSorted()) {
-    if (!path.endsWith(".js")) continue;
-    try {
-      await loadStyle(path);
-    } catch (e) {
-      ztoolkit.logError(e);
-      continue;
+  await withStyleIndexBatch(async () => {
+    for (const path of paths.toSorted()) {
+      if (!path.endsWith(".js")) continue;
+      try {
+        await loadStyle(path);
+      } catch (e) {
+        ztoolkit.logError(e);
+        continue;
+      }
     }
-  }
+  });
 }
 
 export async function installPresetStyles(): Promise<void> {
   const dirPath = await ensureDataDir();
 
-  for (const fileName of STYLE_PRESET_FILES) {
-    try {
-      const code = await readStylePresetFile(fileName);
-      const style = await createStyle(code);
-      const styleId = style.INFO?.id;
-      if (!styleId) {
-        throw new Error(`Preset style ${fileName} missing INFO.id`);
-      }
+  await withStyleIndexBatch(async () => {
+    for (const fileName of STYLE_PRESET_FILES) {
+      try {
+        const code = await readStylePresetFile(fileName);
+        const style = await createStyle(code);
+        const styleId = style.INFO?.id;
+        if (!styleId) {
+          throw new Error(`Preset style ${fileName} missing INFO.id`);
+        }
 
-      if (addon.data.styles.files.has(styleId)) {
-        continue;
-      }
+        if (addon.data.styles.files.has(styleId)) {
+          continue;
+        }
 
-      const destPath = PathUtils.join(dirPath, fileName);
-      if (await IOUtils.exists(destPath)) {
-        continue;
-      }
+        const destPath = PathUtils.join(dirPath, fileName);
+        if (await IOUtils.exists(destPath)) {
+          continue;
+        }
 
-      await IOUtils.writeUTF8(destPath, code);
-      indexLoadedStyle(style, fileName);
-    } catch (e) {
-      ztoolkit.logError(e);
+        await IOUtils.writeUTF8(destPath, code);
+        indexLoadedStyle(style, fileName);
+      } catch (e) {
+        ztoolkit.logError(e);
+      }
     }
-  }
+  });
 }
 
 /**
@@ -338,6 +396,9 @@ export async function deleteStylesById(ids: string[]): Promise<boolean> {
     addon.data.styles.files.delete(id);
     addon.data.styles.cache.delete(id);
     removed = true;
+  }
+  if (removed) {
+    notifyStyleIndexChanged();
   }
   return removed;
 }
