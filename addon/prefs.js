@@ -13,3 +13,11 @@ pref("httpsProxyState", "");
 pref("debugLoggingEnabled", false);
 pref("debugLoggingModules", "");
 pref("debugLoggingDesktopAutoExport", false);
+
+// Which style's ITEM_FIELD_PRESETS feed the item context menu: "" follows the
+// last style parsed for rendering, "-" disables the menu, anything else is a
+// style id.
+pref("fieldPresetStyleId", "");
+// Last style parsed for rendering (document refresh, citation dialog, ...),
+// recorded automatically; not edited by users.
+pref("lastUsedStyleId", "");
