@@ -7,8 +7,13 @@ Maintained by `pnpm changelog` (changelogen). Before a release, edit this
 
 ## Unreleased
 
+### 🩹 Fixes
+
+- **extra field:** Keep key/value lines at the top of `extra` and sort them by key, as Zotero's own documentation requires and citeproc reads them contiguously
+
 ### 💅 Styles
 
+- **breaking:** Keys of `item.extra` follow Zotero's own variable-line syntax now, so lines such as `tex.shorttitle: Foo` or `see:` stay prose and are no longer read as keys
 - **preferences:** Give each setting its own heading (for example "Citation window") with its description underneath, instead of one "General settings" section whose labels were crowded by the help text
 
 ## v0.4.0 (2026-10-07)

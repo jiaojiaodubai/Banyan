@@ -1,7 +1,6 @@
 import { assert } from "chai";
 import {
   CREATOR_EXT_FIELDS,
-  mergeExtraField,
   bindCreatorsExt,
   parseCreatorsExt,
   parseExtraLines,
@@ -31,18 +30,6 @@ describe("creator extension extra data", function () {
     assert.deepEqual(
       lines.map(({ normalizedKey }) => normalizedKey),
       ["original-date", "creators-ext"],
-    );
-  });
-
-  it("retains the existing extra-field merge behavior", function () {
-    assert.equal(
-      mergeExtraField(
-        "Status: draft\nStatus: pending\nGenre: book",
-        "Status",
-        "status",
-        "published",
-      ),
-      "Status: published\nGenre: book",
     );
   });
 

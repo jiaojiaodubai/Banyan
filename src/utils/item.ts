@@ -20,6 +20,44 @@ export type ParsedExtraLine = {
   value: string;
 };
 
+/**
+ * Variable-line syntax of the `extra` field, mirroring Zotero's own readers
+ * (`extractExtraFields` / `combineExtraFields`): a key that starts with a letter
+ * and continues with letters, digits, spaces, hyphens or underscores, followed
+ * by a non-empty value. Anything else is prose.
+ */
+const EXTRA_PAIR_PATTERN = /^([\p{L}][\p{L}\p{N} _-]*?)[ \t]*:[ \t]*(\S.*)$/u;
+
+/** Legacy citeproc.js cheater syntax `{:author: Smith}`, still read by Zotero. */
+const EXTRA_CHEATER_PAIR_PATTERN =
+  /^[ \t]*\{:[ \t]*([\p{L}][\p{L}\p{N} _-]*?)[ \t]*:[ \t]*(\S.*?)[ \t]*\}[ \t]*$/u;
+
+/** Key charset of a variable line, without the `: value` part. */
+const EXTRA_KEY_PATTERN = /^[\p{L}][\p{L}\p{N} _-]*$/u;
+
+/** Split one `extra` line into its normalized key and value, or prose. */
+export function parseExtraLine(raw: string): ParsedExtraLine {
+  const match =
+    raw.match(EXTRA_PAIR_PATTERN) ?? raw.match(EXTRA_CHEATER_PAIR_PATTERN);
+  if (!match) {
+    return { raw, normalizedKey: null, value: "" };
+  }
+  return {
+    raw,
+    normalizedKey: normalizeExtraKey(match[1]),
+    value: match[2].trim(),
+  };
+}
+
+/**
+ * Whether a key can be written as, and read back from, a variable line. A key
+ * refused here is one a write could never match again.
+ */
+export function isValidExtraKey(value: unknown): boolean {
+  const key = typeof value === "string" ? value.trim() : "";
+  return EXTRA_KEY_PATTERN.test(key);
+}
+
 export type ParsedCreatorExtRecord = {
   lineIndex: number;
   record: CreatorExtRecord;
@@ -117,18 +155,13 @@ export function toTitleCaseExtraKey(value: unknown): string {
 function parseExtra(extraText: string): ExtraMap {
   const out: ExtraMap = {};
   const text = typeof extraText === "string" ? extraText : "";
-  for (const rawLine of text.split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line) continue;
-
-    // Translate-like format: "key: value" (first ":" separates)
-    const idx = line.indexOf(":");
-    if (idx <= 0) continue;
-
-    const key = normalizeExtraKey(line.slice(0, idx));
-    const value = line.slice(idx + 1).trim();
+  for (const line of parseExtraLines(text)) {
+    const key = line.normalizedKey;
     if (!key) continue;
 
+    // Repeated keys become an array: a community convention Zotero itself never
+    // writes, kept for compatibility.
+    const value = line.value;
     const prev = out[key];
     if (prev === undefined) {
       out[key] = value;
@@ -143,50 +176,7 @@ function parseExtra(extraText: string): ExtraMap {
 }
 
 export function parseExtraLines(extraText: string): ParsedExtraLine[] {
-  return extraText.split(/\r?\n/).map((raw) => {
-    const index = raw.indexOf(":");
-    if (index <= 0) {
-      return { raw, normalizedKey: null, value: "" };
-    }
-
-    return {
-      raw,
-      normalizedKey: normalizeExtraKey(raw.slice(0, index).trim()),
-      value: raw.slice(index + 1).trim(),
-    };
-  });
-}
-
-export function mergeExtraField(
-  extraText: string,
-  writeKey: string,
-  normalizedKey: string,
-  value: string,
-): string {
-  const newline = extraText.includes("\r\n") ? "\r\n" : "\n";
-  const lines = extraText ? extraText.split(/\r?\n/) : [];
-  const parsed = parseExtraLines(extraText);
-  const newLine = `${writeKey}: ${value}`;
-
-  const firstMatchIndex = parsed.findIndex(
-    (line) => line.normalizedKey === normalizedKey,
-  );
-
-  if (firstMatchIndex === -1) {
-    return lines.length === 0 ? newLine : [...lines, newLine].join(newline);
-  }
-
-  let replaced = false;
-  const out: string[] = [];
-  for (const line of parsed) {
-    if (line.normalizedKey !== normalizedKey) {
-      out.push(line.raw);
-    } else if (!replaced) {
-      out.push(newLine);
-      replaced = true;
-    }
-  }
-  return out.join(newline);
+  return extraText.split(/\r?\n/).map(parseExtraLine);
 }
 
 export function replaceExtraFieldBlock(

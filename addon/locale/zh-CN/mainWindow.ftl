@@ -38,15 +38,19 @@ extra-field-write-failed = 写入其他字段失败：{ $message }
 creators-ext-open-failed = 无法打开创建者信息窗口：{ $message }
 creators-ext-already-open = 已有一个「扩展创建者信息」窗口打开，已切换到该窗口。
 extra-field-error-invalid-key = 字段名无效，请重新输入。
-extra-field-conflict-title = 其他字段已存在
-extra-field-conflict-message = 条目“{ $item }”中的“{ $key }”已存在，当前值：{ $existing }
+extra-field-conflict-title = 字段值冲突
+extra-field-conflict-message = 条目“{ $item }”的“{ $key }”字段已有值“{ $existing }”，是否用“{ $newValue }”覆盖它？
 extra-field-conflict-skip = 跳过
 extra-field-conflict-overwrite = 覆盖
+extra-field-conflict-cancel = 取消
 extra-field-conflict-apply-to-remaining = 将此选择应用到本次会话中其余条目
-extra-field-write-summary = 处理完成：已更新 { $updated } 项，已跳过 { $skipped } 项{ $aborted ->
-    [1] ，并已中止后续处理。
-   *[0] 。
-}
+extra-field-write-summary = 处理完成：已更新 { $updated } 项，已跳过 { $skipped } 项{ $failed ->
+        [0] {""}
+       *[other] ，失败 { $failed } 项
+    }{ $aborted ->
+        [1] ，并已中止后续处理。
+       *[0] 。
+    }
 
 multilingual-retype-title = 多语言条目
 multilingual-retype-message = 条目“{ $item }”已改为“{ $type }”。关联的 { $count } 个多语言条目与它不再是同一类型；多语言组要求组内条目类型一致。

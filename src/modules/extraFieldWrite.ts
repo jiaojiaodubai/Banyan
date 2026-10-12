@@ -2,7 +2,16 @@ import { openDialogWindow } from "../utils/window";
 import { getLocaleID, useL10n } from "../utils/locale";
 import { showSimpleMessage } from "../utils/message";
 import { getRegularSelection } from "../utils/selection";
-import { normalizeExtraKey, toTitleCaseExtraKey } from "../utils/item";
+import {
+  isValidExtraKey,
+  normalizeExtraKey,
+  toTitleCaseExtraKey,
+} from "../utils/item";
+import {
+  analyzeExtraField,
+  mergeExtraField,
+  needsConflictDecision,
+} from "../utils/extraField";
 import type { ItemMenuContribution } from "../../typings/menu";
 
 const t = useL10n(["mainWindow.ftl"]);
@@ -12,18 +21,48 @@ type ExtraFieldDialogResult = {
   value: string;
 };
 
-type ParsedExtraLine = {
-  raw: string;
-  normalizedKey: string | null;
-  value: string;
+/** What the write dialog reads from `window.arguments[0]`. */
+type ExtraFieldDialogIO = {
+  result: ExtraFieldDialogResult | null;
+  deferred: {
+    promise: Promise<void>;
+    resolve: () => void;
+  };
 };
 
-type ConflictAction = "skip" | "overwrite" | "cancel";
+function openExtraFieldDialog(io: ExtraFieldDialogIO): void {
+  openDialogWindow(
+    `chrome://${addon.data.config.addonRef}/content/extraFieldDialog.xhtml`,
+    "modal,resizable=yes",
+    io,
+  );
+}
 
-type ConflictDecision = {
+export type ConflictAction = "skip" | "overwrite" | "cancel";
+
+export type ConflictDecision = {
   action: ConflictAction;
   applyToRemaining: boolean;
 };
+
+/**
+ * Put an item back to the state the database holds after a failed save: reload
+ * and clear the change log, as Zotero's own save-failure recovery does.
+ * `restoreFallback` covers an environment where reloading is unavailable.
+ */
+export async function recoverItemAfterFailedSave(
+  item: Zotero.Item,
+  restoreFallback: () => void,
+): Promise<void> {
+  try {
+    await item.reload(null, true);
+    item._clearChanged();
+    return;
+  } catch (error) {
+    ztoolkit.logError(error);
+  }
+  restoreFallback();
+}
 
 export const writeExtraFieldItemMenu: ItemMenuContribution = {
   id: "write-extra-field",
@@ -58,8 +97,8 @@ async function openWriteExtraFieldDialog(): Promise<void> {
   }
 
   return new Promise((resolve) => {
-    const io = {
-      result: null as ExtraFieldDialogResult | null,
+    const io: ExtraFieldDialogIO = {
+      result: null,
       deferred: {
         promise: Promise.resolve(),
         resolve: async () => {
@@ -82,14 +121,13 @@ async function openWriteExtraFieldDialog(): Promise<void> {
       },
     };
 
-    openDialogWindow(
-      `chrome://${addon.data.config.addonRef}/content/extraFieldDialog.xhtml`,
-      "modal,resizable=yes",
-      io,
-    );
+    openExtraFieldDialog(io);
   });
 }
 
+/**
+ * Write one key to many items, asking once per conflicting value.
+ */
 async function batchWriteExtraField(
   items: Zotero.Item[],
   payload: ExtraFieldDialogResult,
@@ -99,7 +137,7 @@ async function batchWriteExtraField(
   const writeKey = toTitleCaseExtraKey(payload.key);
   const value = payload.value;
   const normalizedKey = normalizeExtraKey(writeKey);
-  if (!normalizedKey) {
+  if (!normalizedKey || !isValidExtraKey(payload.key)) {
     showSimpleMessage(t("extra-field-error-invalid-key"));
     return;
   }
@@ -112,13 +150,23 @@ async function batchWriteExtraField(
   for (const item of items) {
     const originalExtra = String(item.getField("extra") || "");
     const analysis = analyzeExtraField(originalExtra, normalizedKey);
+    const alreadyWritten =
+      analysis.values.length === 1 && analysis.values[0] === value;
 
-    if (analysis.values.length > 0) {
+    // Re-applying the value already there is a no-op; skip before asking so
+    // the write neither prompts nor reorders `extra` (pairs move to the top
+    // block, which would otherwise touch an item that needs no change).
+    if (!alreadyWritten && needsConflictDecision(analysis.values, value)) {
       let action: ConflictAction;
       if (autoAction) {
         action = autoAction;
       } else {
-        const decision = promptExtraConflict(item, writeKey, analysis.values);
+        const decision = promptExtraConflict(
+          item,
+          writeKey,
+          analysis.values,
+          value,
+        );
         if (decision.action === "cancel") {
           aborted = true;
           break;
@@ -133,6 +181,9 @@ async function batchWriteExtraField(
         skippedCount++;
         continue;
       }
+    } else if (alreadyWritten) {
+      skippedCount++;
+      continue;
     }
 
     const nextExtra = mergeExtraField(
@@ -148,7 +199,15 @@ async function batchWriteExtraField(
     }
 
     item.setField("extra", nextExtra);
-    await item.saveTx();
+    try {
+      await item.saveTx();
+    } catch (error) {
+      // The item keeps only what is stored: the write never happened.
+      await recoverItemAfterFailedSave(item, () => {
+        item.setField("extra", originalExtra);
+      });
+      throw error;
+    }
     updatedCount++;
   }
 
@@ -157,93 +216,37 @@ async function batchWriteExtraField(
       args: {
         updated: updatedCount,
         skipped: skippedCount,
+        failed: 0,
         aborted: aborted ? 1 : 0,
       },
     }),
   );
 }
 
-function analyzeExtraField(
-  extraText: string,
-  normalizedKey: string,
-): {
-  values: string[];
-} {
-  const parsed = parseExtraLines(extraText);
-  const values = parsed
-    .filter((line) => line.normalizedKey === normalizedKey)
-    .map((line) => line.value);
-  return { values };
-}
-
-function parseExtraLines(extraText: string): ParsedExtraLine[] {
-  return extraText.split(/\r?\n/).map((raw) => {
-    const index = raw.indexOf(":");
-    if (index <= 0) {
-      return {
-        raw,
-        normalizedKey: null,
-        value: "",
-      };
-    }
-
-    const key = raw.slice(0, index).trim();
-    return {
-      raw,
-      normalizedKey: normalizeExtraKey(key),
-      value: raw.slice(index + 1).trim(),
-    };
-  });
-}
-
-function mergeExtraField(
-  extraText: string,
-  writeKey: string,
-  normalizedKey: string,
-  value: string,
-): string {
-  const newline = extraText.includes("\r\n") ? "\r\n" : "\n";
-  const lines = extraText ? extraText.split(/\r?\n/) : [];
-  const parsed = parseExtraLines(extraText);
-  const newLine = `${writeKey}: ${value}`;
-
-  const firstMatchIndex = parsed.findIndex(
-    (line) => line.normalizedKey === normalizedKey,
+/**
+ * Short label of an item for prompt text: its title when it has one, otherwise
+ * Zotero's own display title (creator/date), otherwise the item key.
+ */
+export function getItemPromptLabel(item: Zotero.Item): string {
+  return (
+    String(item.getField("title") || "").trim() ||
+    String(item.getDisplayTitle?.() || "").trim() ||
+    item.key
   );
-
-  if (firstMatchIndex === -1) {
-    if (lines.length === 0) {
-      return newLine;
-    }
-    return [...lines, newLine].join(newline);
-  }
-
-  let replaced = false;
-  const out: string[] = [];
-  for (let i = 0; i < parsed.length; i++) {
-    if (parsed[i].normalizedKey !== normalizedKey) {
-      out.push(parsed[i].raw);
-      continue;
-    }
-
-    if (!replaced) {
-      out.push(newLine);
-      replaced = true;
-    }
-  }
-  return out.join(newline);
 }
 
-function promptExtraConflict(
+/**
+ * Ask what to do about a value that is already there, naming the item, the key
+ * and both values. The buttons are localized by the plugin.
+ */
+export function promptExtraConflict(
   item: Zotero.Item,
   writeKey: string,
   existingValues: string[],
+  newValue: string,
 ): ConflictDecision {
   const checkState = { value: false };
-  const itemLabel =
-    String(item.getField("title") || "").trim() ||
-    String(item.getDisplayTitle?.() || "").trim() ||
-    item.key;
+  const itemLabel = getItemPromptLabel(item);
   const existingText = existingValues.join("; ");
 
   const selected = Zotero.Prompt.confirm({
@@ -254,11 +257,12 @@ function promptExtraConflict(
         item: itemLabel,
         key: writeKey,
         existing: existingText,
+        newValue,
       },
     }),
     button0: t("extra-field-conflict-skip"),
     button1: t("extra-field-conflict-overwrite"),
-    button2: Zotero.Prompt.BUTTON_TITLE_CANCEL,
+    button2: t("extra-field-conflict-cancel"),
     checkLabel: t("extra-field-conflict-apply-to-remaining"),
     checkbox: checkState,
   });

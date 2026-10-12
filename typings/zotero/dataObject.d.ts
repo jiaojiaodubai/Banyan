@@ -12,4 +12,18 @@ declare namespace Zotero {
       undoActionArgs?: Record<string, unknown>;
     }
   }
+
+  /** `Zotero.DataObject`, the base of `Zotero.Item`, `Zotero.Collection`, … . */
+  interface DataObject {
+    /**
+     * Reload data from the database, discarding unsaved changes.
+     *
+     * @param dataTypes types to reload; defaults to the loaded ones
+     * @param reloadUnchanged reload types without changes too
+     */
+    reload(
+      dataTypes?: string[] | null,
+      reloadUnchanged?: boolean,
+    ): Promise<void>;
+  }
 }
