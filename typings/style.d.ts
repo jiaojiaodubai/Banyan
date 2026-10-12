@@ -76,15 +76,7 @@ export type StyleInfo<T extends CitationType = CitationType> = {
   [key: string]: unknown;
 };
 
-type StyleSummary = Pick<
-  StyleInfo,
-  "id" | "title" | "citationType" | "description" | "updated"
->;
-
-export type StyleFile = StyleSummary & {
-  filename: string;
-};
-
+/** One declared control; the host renders it and owns its behavior. */
 type ComponentBase = {
   id: string;
   label: string;
