@@ -5,6 +5,12 @@ Maintained by `pnpm changelog` (changelogen). Before a release, edit this
 "Unreleased" section as needed; `pnpm release` will then cut the version.
 -->
 
+## Unreleased
+
+### 💅 Styles
+
+- **preferences:** Give each setting its own heading (for example "Citation window") with its description underneath, instead of one "General settings" section whose labels were crowded by the help text
+
 ## v0.4.0 (2026-10-07)
 
 [compare changes](https://github.com/jiaojiaodubai/banyan/compare/v0.3.0...v0.4.0)
