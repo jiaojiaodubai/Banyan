@@ -21,3 +21,5 @@ pref("itemMenuStyleId", "");
 // Last style parsed for rendering (document refresh, citation dialog, ...),
 // recorded automatically; not edited by users.
 pref("lastUsedStyleId", "");
+// `extra` key shown by the "Extra value" item-list column; "" hides the column.
+pref("extraValueColumnKey", "");

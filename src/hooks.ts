@@ -13,6 +13,7 @@ import {
   unpatchCollectionsView,
 } from "./modules/citedItemsSearch";
 import { registerToolsMenu, registerContextMenu } from "./modules/menu";
+import { registerExtraValueColumn } from "./modules/extraValueColumn";
 import {
   registerRetypeObserver,
   unregisterRetypeObserver,
@@ -47,6 +48,7 @@ async function onStartup() {
   registerToolsMenu();
   registerContextMenu();
   registerRetypeObserver();
+  registerExtraValueColumn();
   await initializeServer();
   await ensureStyleEditorRuntimeAssets();
   await loadStyles();

@@ -20,6 +20,7 @@ declare namespace _ZoteroTypes {
       "debugLoggingDesktopAutoExport": boolean;
       "itemMenuStyleId": string;
       "lastUsedStyleId": string;
+      "extraValueColumnKey": string;
     };
   }
 }

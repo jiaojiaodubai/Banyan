@@ -14,6 +14,10 @@ import {
   ITEM_MENU_STYLE_PREF,
   getItemMenuSourceSelection,
 } from "./itemMenu";
+import {
+  EXTRA_VALUE_COLUMN_KEY_PREF,
+  refreshExtraValueColumn,
+} from "./extraValueColumn";
 import { VirtualizedTableHelper } from "zotero-plugin-toolkit";
 import type { StyleFile } from "../../typings/styleIndex";
 import { isWindowAlive } from "../utils/window";
@@ -148,6 +152,36 @@ function updateItemMenuStyleOptions(): void {
   }
 }
 
+/**
+ * The item-tree column reads one extra key, so the key is edited here and the
+ * column is (re)registered on every change: Zotero's own column settings can
+ * only toggle columns, not configure what a plugin column shows.
+ */
+function bindExtraValueColumnKey(): void {
+  const win = addon.data.prefs?.window;
+  if (!win) return;
+  const input = win.document.querySelector(
+    `#${config.addonRef}-extraValueColumnKey`,
+  ) as HTMLInputElement | null;
+  if (!input) return;
+
+  input.value = String(getPref(EXTRA_VALUE_COLUMN_KEY_PREF) ?? "");
+  if (input.hasAttribute("data-extra-value-bound")) return;
+  input.setAttribute("data-extra-value-bound", "true");
+
+  const commit = () => {
+    const value = input.value.trim();
+    if (String(getPref(EXTRA_VALUE_COLUMN_KEY_PREF) ?? "") === value) {
+      return;
+    }
+    setPref(EXTRA_VALUE_COLUMN_KEY_PREF, value);
+    refreshExtraValueColumn();
+  };
+  // `change` fires on blur/Enter, so the column is rebuilt once per edit
+  // instead of on every keystroke.
+  input.addEventListener("change", commit);
+}
+
 export function registerPrefs() {
   Zotero.PreferencePanes.register({
     pluginID: addon.data.config.addonID,
@@ -198,6 +232,7 @@ export async function onPrefsWindowLoad(_window: Window) {
   }
   bindCitationDialogInitialCollectionMode();
   updateItemMenuStyleOptions();
+  bindExtraValueColumnKey();
   await updatePrefsUI();
   bindPrefEvents();
   bindIntegrationButtons();
