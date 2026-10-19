@@ -7,7 +7,11 @@ import {
 import hooks from "./hooks";
 import { createZToolkit } from "./utils/ztoolkit";
 import { Style } from "../typings/style";
-import { IndexedFieldPreset, StyleFile } from "../typings/styleIndex";
+import {
+  IndexedFieldPreset,
+  IndexedItemFieldValidators,
+  StyleFile,
+} from "../typings/styleIndex";
 import { createLocale } from "./utils/locale";
 import { getStyleUI } from "./modules/styles";
 
@@ -29,6 +33,7 @@ class Addon {
       files: Map<string, StyleFile>;
       cache: Map<string, Style>;
       fieldPresets: Map<string, IndexedFieldPreset[]>;
+      itemFieldValidators: Map<string, IndexedItemFieldValidators>;
     };
     dialog?: DialogHelper;
   };
@@ -51,6 +56,7 @@ class Addon {
         files: new Map(),
         cache: new Map(),
         fieldPresets: new Map(),
+        itemFieldValidators: new Map(),
       },
     };
     this.hooks = hooks;

@@ -67,6 +67,10 @@ export default defineConfig({
             in: "src/dialogs/multilingualItemDialog.ts",
             out: "multilingualItemDialog",
           },
+          {
+            in: "src/dialogs/itemFieldValidatorDialog.ts",
+            out: "itemFieldValidatorDialog",
+          },
         ],
         define: {
           __env__: `"${process.env.NODE_ENV}"`,

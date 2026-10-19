@@ -18,7 +18,7 @@ declare namespace _ZoteroTypes {
       "debugLoggingEnabled": boolean;
       "debugLoggingModules": string;
       "debugLoggingDesktopAutoExport": boolean;
-      "fieldPresetStyleId": string;
+      "itemMenuStyleId": string;
       "lastUsedStyleId": string;
     };
   }

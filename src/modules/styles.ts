@@ -5,6 +5,7 @@ import { useL10n } from "../utils/locale";
 import { getPref, setPref } from "../utils/prefs";
 import { createStyle } from "./sandbox";
 import presetsManifest from "../../addon/content/styleEditor/presets/presets-manifest.json";
+import type { IndexedItemFieldValidators } from "../../typings/styleIndex";
 
 const t = useL10n();
 
@@ -138,6 +139,7 @@ function indexLoadedStyle(style: Style, filename: string): void {
     filename,
   });
   indexStyleFieldPresets(style);
+  indexStyleItemFieldValidators(style);
   notifyStyleIndexChanged();
 }
 
@@ -162,6 +164,25 @@ function indexStyleFieldPresets(style: Style): void {
       styleTitle,
     })),
   );
+}
+
+/**
+ * Keep the item-type keyed field checks of the styles that declare them. The
+ * checker closures hold the style's sandbox alive, so only styles using the
+ * feature pay for it.
+ */
+function indexStyleItemFieldValidators(style: Style): void {
+  const styleId = style.INFO.id;
+  const byType = style.ITEM_FIELD_VALIDATORS;
+  if (!byType || !Object.keys(byType).length) {
+    addon.data.styles.itemFieldValidators.delete(styleId);
+    return;
+  }
+  addon.data.styles.itemFieldValidators.set(styleId, {
+    styleId,
+    styleTitle: style.INFO.title || styleId,
+    byType,
+  });
 }
 
 type StyleIndexListener = () => void;
@@ -196,19 +217,36 @@ export async function withStyleIndexBatch<T>(
   }
 }
 
-/** Styles that declare `ITEM_FIELD_PRESETS`, sorted by title. */
-export function getFieldPresetStyles(): { id: string; title: string }[] {
-  return Array.from(addon.data.styles.fieldPresets.values())
-    .map((presets) => ({
-      id: presets[0].styleId,
-      title: presets[0].styleTitle,
-    }))
+/** Styles that declare quick marks or field checks, sorted by title. */
+export function getItemMenuStyles(): { id: string; title: string }[] {
+  return Array.from(addon.data.styles.files.values())
+    .filter(
+      (style) => hasFieldPresets(style.id) || hasItemFieldValidators(style.id),
+    )
+    .map(({ id, title }) => ({ id, title }))
     .sort((a, b) => a.title.localeCompare(b.title));
 }
 
 /** Whether a style currently contributes quick marks. */
 export function hasFieldPresets(styleId: string): boolean {
   return addon.data.styles.fieldPresets.has(styleId);
+}
+
+/** Whether a style currently contributes field checks. */
+export function hasItemFieldValidators(styleId: string): boolean {
+  return addon.data.styles.itemFieldValidators.has(styleId);
+}
+
+/** Whether a style contributes anything to the item menu. */
+export function hasItemMenuDeclarations(styleId: string): boolean {
+  return hasFieldPresets(styleId) || hasItemFieldValidators(styleId);
+}
+
+/** Field-check declarations of one indexed style, if any. */
+export function getStyleItemFieldValidators(
+  styleId: string,
+): IndexedItemFieldValidators | undefined {
+  return addon.data.styles.itemFieldValidators.get(styleId);
 }
 
 function notifyStyleIndexChanged(): void {
@@ -321,6 +359,7 @@ export async function loadStyles(reset?: boolean): Promise<void> {
     addon.data.styles.files.clear();
     addon.data.styles.cache.clear();
     addon.data.styles.fieldPresets.clear();
+    addon.data.styles.itemFieldValidators.clear();
     // The index stays empty when the directory has no readable style left, so
     // the menu has to hear about the cleared index before the files are read.
     notifyStyleIndexChanged();
@@ -458,6 +497,7 @@ export async function deleteStylesById(ids: string[]): Promise<boolean> {
     addon.data.styles.files.delete(id);
     addon.data.styles.cache.delete(id);
     addon.data.styles.fieldPresets.delete(id);
+    addon.data.styles.itemFieldValidators.delete(id);
     removed = true;
   }
   if (removed) {

@@ -20,6 +20,7 @@ import {
 import { ensureStyleEditorRuntimeAssets } from "./modules/styleEditor";
 import { initializeServer, shutdownServer } from "./modules/server";
 import { DIALOG_WINDOW_NAME } from "./modules/multilingualItem";
+import { closeItemFieldValidatorWindow } from "./modules/itemFieldValidators";
 import { findWindowByName } from "./utils/window";
 
 function registerAPIs(): void {
@@ -121,6 +122,7 @@ function onShutdown(): void {
   cleanupCitationColumn();
   unregisterRetypeObserver();
   shutdownServer();
+  closeItemFieldValidatorWindow();
   ztoolkit.unregisterAll();
   addon.data.dialog?.window?.close();
   // The editor keeps references to this now-destroyed instance; the next
