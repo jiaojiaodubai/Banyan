@@ -1,5 +1,8 @@
 import { useL10n } from "../utils/locale";
 import { unwrapDialogIO } from "../utils/window";
+import { createLogger } from "../utils/logger";
+
+const log = createLogger("extra-field-dialog");
 
 const t = useL10n(["extraFieldDialog.ftl"]);
 
@@ -53,7 +56,7 @@ window.addEventListener("unload", () => {
 function initExtraFieldDialog(): void {
   const arg = unwrapDialogIO<IO>(window.arguments?.[0]);
   if (!arg) {
-    ztoolkit.logError("extraFieldDialog: window IO is missing");
+    log.error("window IO is missing");
     return;
   }
   io = arg;

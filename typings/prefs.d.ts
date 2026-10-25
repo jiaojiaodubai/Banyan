@@ -15,9 +15,6 @@ declare namespace _ZoteroTypes {
       "serverTrustedOrigins": string;
       "httpsProxyEnabled": boolean;
       "httpsProxyState": string;
-      "debugLoggingEnabled": boolean;
-      "debugLoggingModules": string;
-      "debugLoggingDesktopAutoExport": boolean;
       "itemMenuStyleId": string;
       "lastUsedStyleId": string;
       "extraValueColumnKey": string;

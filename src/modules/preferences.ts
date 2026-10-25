@@ -10,14 +10,14 @@ import {
 } from "./styles";
 import { refreshItemMenu } from "./menu";
 import {
+  EXTRA_VALUE_COLUMN_KEY_PREF,
+  refreshExtraValueColumn,
+} from "./extraValueColumn";
+import {
   ITEM_MENU_DISABLED,
   ITEM_MENU_STYLE_PREF,
   getItemMenuSourceSelection,
 } from "./itemMenu";
-import {
-  EXTRA_VALUE_COLUMN_KEY_PREF,
-  refreshExtraValueColumn,
-} from "./extraValueColumn";
 import { VirtualizedTableHelper } from "zotero-plugin-toolkit";
 import type { StyleFile } from "../../typings/styleIndex";
 import { isWindowAlive } from "../utils/window";
@@ -27,6 +27,9 @@ import {
   installWordTemplate,
   uninstallWordTemplate,
 } from "./integration";
+import { createLogger } from "../utils/logger";
+
+const log = createLogger("preferences");
 
 type PrefStyleRow = {
   id: string;
@@ -84,8 +87,8 @@ function getPrefsWindow(): Window | null {
 }
 
 /**
- * Fill the "Quick Marks" menu source list: the two fixed options plus one entry
- * per style that declares `ITEM_FIELD_PRESETS`.
+ * Fill the item-menu source list: the two fixed options plus one entry per
+ * style that declares quick marks or field checks.
  */
 function updateItemMenuStyleOptions(): void {
   const win = getPrefsWindow();
@@ -123,8 +126,9 @@ function updateItemMenuStyleOptions(): void {
   }
 
   // A stored style that is not in the list (deleted, or no longer declaring
-  // marks) falls back to "Last used" here; the stored preference is left alone,
-  // so a choice survives the moments when the index is empty while styles load.
+  // anything) falls back to "Last used" here; the stored preference is left
+  // alone, so a choice survives the moments when the index is empty while
+  // styles load.
   const current = String(getPref(ITEM_MENU_STYLE_PREF) ?? "");
   const selected = getItemMenuSourceSelection(
     current,
@@ -189,15 +193,13 @@ export function registerPrefs() {
     label: t("prefs-title"),
     image: `chrome://${addon.data.config.addonRef}/content/icons/favicon.svg`,
   });
-  // Keep the mark-source list in step with the style index while the pane
-  // is open (a style imported, saved, deleted elsewhere, or losing its marks).
+  // The item-menu source list follows the style index while the pane is open
+  // (a style imported, saved, deleted elsewhere, or losing its declarations).
   // `updateItemMenuStyleOptions()` returns early when the window is closed.
   onStyleIndexChanged(updateItemMenuStyleOptions);
 }
 
 export async function onPrefsWindowLoad(_window: Window) {
-  // This function is called when the prefs window is opened
-  // See addon/content/preferences.xhtml onpaneload
   if (!addon.data.prefs) {
     addon.data.prefs = {
       window: _window,
@@ -255,8 +257,7 @@ async function updatePrefsUI() {
       .setContainerId(`${config.addonRef}-table-container`)
       .setProp({
         id: `${config.addonRef}-prefs-table`,
-        // Do not use setLocale, as it modifies the Zotero.Intl.strings
-        // Set locales directly to columns
+        // `setLocale` mutates Zotero.Intl.strings; set column locales directly.
         columns: addon.data.prefs?.columns,
         showHeader: true,
         multiSelect: true,
@@ -270,8 +271,7 @@ async function updatePrefsUI() {
           ? { name: r.name, updated: r.updated }
           : { name: "no data", updated: "" };
       })
-      // When pressing delete, delete selected line and refresh table.
-      // Returning false to prevent default event.
+      // Returning false prevents the table's default key handling.
       .setProp("onKeyDown", (event: KeyboardEvent) => {
         if (
           event.key == "Delete" ||
@@ -282,16 +282,15 @@ async function updatePrefsUI() {
         }
         return true;
       })
-      // For find-as-you-type
+      // Row text used by type-ahead.
       .setProp(
         "getRowString",
         (index) => addon.data.prefs?.rows[index].name || "",
       )
       // Render the table.
       .render(-1, () => {
-        // Fix: table may show partially blank until scrolled.
-        // Delay invalidate to ensure DOM layout is complete
-        // (matching Zotero's setTimeout approach in preferences_cite.jsx).
+        // Zotero's own preferences table also invalidates after layout;
+        // without the delay the first render can stay partially blank.
         setTimeout(() => {
           tableHelper.treeInstance?.invalidate();
         });
@@ -299,7 +298,7 @@ async function updatePrefsUI() {
       });
     addon.data.prefs.tableHelper = tableHelper;
     bindStyleButtons(tableHelper);
-    // The style list drives both the table and the mark-source options.
+    // The style list drives both the table and the item-menu source options.
     updateItemMenuStyleOptions();
   });
 }
@@ -378,7 +377,7 @@ function bindIntegrationButtons() {
           }),
         );
       } catch (error) {
-        ztoolkit.logError(error);
+        log.error("安装 WPS 加载项失败", error);
         Services.prompt.alert(
           promptWindow,
           t("prefs-wps-addon-title"),
@@ -424,7 +423,7 @@ function bindIntegrationButtons() {
           }),
         );
       } catch (error) {
-        ztoolkit.logError(error);
+        log.error("卸载 WPS 加载项失败", error);
         Services.prompt.alert(
           promptWindow,
           t("prefs-wps-addon-title"),
@@ -486,7 +485,7 @@ function bindIntegrationButtons() {
           }),
         );
       } catch (error) {
-        ztoolkit.logError(error);
+        log.error("安装 Word 模板失败", error);
         Services.prompt.alert(
           promptWindow,
           t("prefs-word-addon-title"),
@@ -532,7 +531,7 @@ function bindIntegrationButtons() {
           }),
         );
       } catch (error) {
-        ztoolkit.logError(error);
+        log.error("卸载 Word 模板失败", error);
         Services.prompt.alert(
           promptWindow,
           t("prefs-word-addon-title"),

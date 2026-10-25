@@ -10,8 +10,8 @@ export type RegularSelection = {
 
 export function getRegularSelection(): RegularSelection {
   const pane = Zotero.getActiveZoteroPane();
-  // Never throw from an `onShowing` handler: a throw aborts Zotero's whole
-  // context-menu build, leaving the popup without labels.
+  // An empty selection keeps a missing pane from throwing inside `onShowing`,
+  // which would abort Zotero's whole context-menu build.
   if (!pane) {
     return { canEdit: false, items: [], selectedCount: 0 };
   }

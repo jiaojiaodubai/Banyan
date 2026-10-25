@@ -8,6 +8,9 @@ import {
 } from "../utils/window";
 import type { CreatorExtDialogIO } from "../../typings/creatorsExtDialog";
 import type { ItemMenuContribution } from "../../typings/menu";
+import { createLogger } from "../utils/logger";
+
+const log = createLogger("creators-ext");
 
 const CREATOR_ROW_FIELD_PATTERN =
   /^creator-(\d+)-(?:lastName|firstName|typeID)$/;
@@ -104,7 +107,7 @@ export const creatorsExtItemMenu: ItemMenuContribution = {
           }
 
           void openCreatorsExtDialog(item).catch((error) => {
-            ztoolkit.logError(error);
+            log.error("打开合作者扩展对话框失败", error);
             notify(
               t("creators-ext-open-failed", {
                 args: {
@@ -162,7 +165,7 @@ export function registerCreatorsExtRowMenu(): void {
 
           void openCreatorsExtDialog(target.item, target.creatorIndex).catch(
             (error) => {
-              ztoolkit.logError(error);
+              log.error("打开合作者扩展对话框失败", error);
               notify(
                 t("creators-ext-open-failed", {
                   args: {
