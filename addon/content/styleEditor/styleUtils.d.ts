@@ -53,28 +53,37 @@ type FormatDate = <T>(
 ) => T | string;
 
 /**
- * Additional utilities injected into the style sandbox besides the
- * {@link UnitUtils} builders. The `read*`/multilingual helpers are async
- * and return Promises; everything else is synchronous.
+ * Additional utilities injected into the style sandbox: the {@link UnitUtils}
+ * builders plus the readers and helpers below. The `read*`/multilingual
+ * helpers are async and return Promises; everything else is synchronous.
+ *
+ * The sandbox also provides `console`:
+ *
+ * - `log` / `debug` / `trace` (also `dir`, `dirxml`, `table`) are tracing
+ *   output: a stream that may be dropped, budgeted per run and never kept.
+ * - `info` / `warn` / `error` are findings: they are kept on the style instance
+ *   (`style.diagnostics`) and reach a host's console. A style that can continue
+ *   reports here instead of throwing.
+ * - `assert(condition, ...)` reports like `error` when the condition is false.
+ * - `count`, `time`, `group`, `clear` and friends exist and do nothing.
  */
 type StyleUtils = UnitUtils & {
   // async
   /**
-   * Read a file inside the Zotero data directory's `banyan` folder as raw
-   * bytes. `relPath` is relative to that folder; absolute paths and `..`
-   * traversal are rejected. No hard size limit is enforced.
+   * Read a file through the host's `readFile` capability as raw bytes.
+   * `relPath` is resolved by the host; which directory, what traversal rules
+   * and whether a size limit applies are the host's policy
+   * (`dev/hostIntegration.md`, capabilities).
    */
   readBytes: (relPath: string, options?: ReadOptions) => Promise<Uint8Array>;
   /**
-   * Read a UTF-8 text file inside the data directory's `banyan` folder.
-   * `relPath` is relative to that folder; absolute paths and `..`
-   * traversal are rejected. No hard size limit is enforced.
+   * Read a UTF-8 text file through the host's `readFile` capability.
+   * The path and size policy are the host's, as for {@link readBytes}.
    */
   readText: (relPath: string, options?: ReadUTF8Options) => Promise<string>;
   /**
-   * Read and parse a JSON file inside the data directory's `banyan` folder.
-   * `relPath` is relative to that folder; absolute paths and `..`
-   * traversal are rejected. No hard size limit is enforced.
+   * Read and parse JSON through the host's `readFile` capability.
+   * The path and size policy are the host's, as for {@link readBytes}.
    */
   readJSON: <T = unknown>(
     relPath: string,
@@ -104,12 +113,6 @@ type StyleUtils = UnitUtils & {
     language: MultilingualLanguage,
   ) => Promise<T>;
   // sync
-  /**
-   * Print values to the Zotero console while a style runs. Objects are
-   * JSON-serialized and long output is truncated. Returns the formatted
-   * message that was logged.
-   */
-  debug: (...values: unknown[]) => string;
   /** Generate a random RFC 4122 version 4 UUID string. */
   uuid: () => string;
   /**
@@ -119,6 +122,26 @@ type StyleUtils = UnitUtils & {
    * missing). Keys must already be normalized — see {@link ExtraValueItem}.
    */
   getExtraValue: GetExtraValue;
+  /**
+   * Parse restricted markup — for example a `format:"rich"` parameter value or
+   * markup received from an external source — into one Unit. A structured `RichText` is
+   * already a Unit and needs no conversion.
+   * Recognized tags are the same ones generate output accepts
+   * (`b`/`strong`, `i`/`em`, `sup`, `sub`, `a`, `span`, `br`, `sc`). A value
+   * with no recognized tag stays literal text; once one is present, unknown
+   * elements are dropped while their text is kept. `nocase` spans and `sc`
+   * are resolved into casing at this point, not preserved as markup.
+   * Use `unitToHtml` for the other direction.
+   */
+  htmlToUnit: (html: string) => Unit;
+  /**
+   * Serialize a Unit to restricted markup, escaping text and filtering link
+   * protocols. Intended for debugging, tests, string sinks and external
+   * interfaces; normal citation output is already a Unit and does not need it.
+   * Round-trips the visual marks `htmlToUnit` can represent; casing that was
+   * resolved while parsing (`nocase`, `sc`) comes back as characters.
+   */
+  unitToHtml: (unit: Unit) => string;
   /**
    * Parse a date and feed its `{ year, month, day }` parts to `callback`,
    * returning the callback result, or the untouched input when the value
@@ -163,9 +186,10 @@ declare const readText: StyleUtils["readText"];
 declare const readJSON: StyleUtils["readJSON"];
 declare const getMultilingualItems: StyleUtils["getMultilingualItems"];
 declare const getMultilingualItem: StyleUtils["getMultilingualItem"];
-declare const debug: StyleUtils["debug"];
 declare const uuid: StyleUtils["uuid"];
 declare const getExtraValue: StyleUtils["getExtraValue"];
+declare const htmlToUnit: StyleUtils["htmlToUnit"];
+declare const unitToHtml: StyleUtils["unitToHtml"];
 declare const formatDate: StyleUtils["formatDate"];
 declare const safeRecord: StyleUtils["safeRecord"];
 declare const safeString: StyleUtils["safeString"];
